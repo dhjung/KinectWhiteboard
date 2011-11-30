@@ -1,0 +1,6 @@
+C:\Users\dhjung\Documents\Visual Studio 2010\Projects\KinectWhiteboard\KinectWhiteboardServer\bin\Debug\KinectWhiteboardServer.exe.config
+C:\Users\dhjung\Documents\Visual Studio 2010\Projects\KinectWhiteboard\KinectWhiteboardServer\bin\Debug\KinectWhiteboardServer.exe
+C:\Users\dhjung\Documents\Visual Studio 2010\Projects\KinectWhiteboard\KinectWhiteboardServer\bin\Debug\KinectWhiteboardServer.pdb
+C:\Users\dhjung\Documents\Visual Studio 2010\Projects\KinectWhiteboard\KinectWhiteboardServer\obj\x86\Debug\ResolveAssemblyReference.cache
+C:\Users\dhjung\Documents\Visual Studio 2010\Projects\KinectWhiteboard\KinectWhiteboardServer\obj\x86\Debug\KinectWhiteboardServer.exe
+C:\Users\dhjung\Documents\Visual Studio 2010\Projects\KinectWhiteboard\KinectWhiteboardServer\obj\x86\Debug\KinectWhiteboardServer.pdb

@@ -22,7 +22,15 @@
         <WrapPanel Grid.Column="0"
                    Grid.Row="0">
             <local:KinectButton x:Name="Connect"
+                                Click="OnConnect"
                                 Content="CONNECT" 
+                                FontSize="40" 
+                                Width="200" 
+                                Height="100" 
+                                Margin="10"/>
+            <local:KinectButton x:Name="Disconnect"
+                                Click="OnDisconnect"
+                                Content="DISCONNECT" 
                                 FontSize="40" 
                                 Width="200" 
                                 Height="100" 
@@ -35,10 +43,18 @@
                                 Height="100" 
                                 Margin="10" />
             <Label x:Name="InfoLabel"
-                           Width="600"
-                           Height="100"
-                           FontSize="40"
-                           Margin="10"/>
+                   Width="300"
+                   Height="50"
+                   Content="Info Label"
+                   FontSize="24"
+                   Margin="10" 
+                   Visibility="Visible" />
+            <Label x:Name="ImageLabel"
+                   Width="300"
+                   Height="50"
+                   Content="Image Info"
+                   FontSize="24"
+                   Visibility="Visible" />
             <TextBlock x:Name="PART_ErrorText"
                    Text="Failed to start the Kinect!"
                    IsHitTestVisible="False"
@@ -101,6 +117,11 @@
                     <ImageBrush ImageSource="Resources/cal6.png" />
                 </Rectangle.Fill>
             </Rectangle>
+            <Ellipse x:Name="Partner"
+                 Width="20"
+                 Height="20"
+                 Fill="BlueViolet"
+                 Grid.RowSpan="2" />
         </Canvas>
         <local:KinectCursor x:Name="PART_Cursor"
                             Grid.RowSpan="2" />

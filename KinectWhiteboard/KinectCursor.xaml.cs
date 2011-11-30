@@ -284,6 +284,9 @@ namespace KinectWhiteboard
             }
             else
             {
+                // Send my cursor position to remote user
+                MainWindow.Instance.SendCursorPosition((int)CursorPosition.X, (int)CursorPosition.Y);
+                
                 // To begin painting w/ Kinect, raise your left hand above your shoulder.
                 // To stop painting, lower it.
 
@@ -308,8 +311,13 @@ namespace KinectWhiteboard
                 {
                     Rectangle selectedRectangle = new Rectangle();
 
-                    switch (MainWindow.Instance.rectangleNumber)
+                    // Image number
+                    int number = MainWindow.Instance.rectangleNumber;
+
+                    switch (number)
                     {
+                        case 0:
+                            break;
                         case 1:
                             selectedRectangle = MainWindow.Instance.R1;
                             break;
@@ -329,22 +337,33 @@ namespace KinectWhiteboard
                             selectedRectangle = MainWindow.Instance.R6;
                             break;
                     }
-                    // When rectangle is moving 
-                    selectedRectangle.Opacity = 0.5;
-                    // selectedRectangle.IsHitTestVisible = false;
-                    Canvas.SetZIndex(selectedRectangle, 10);
 
-                    if (isup)
+                    if (selectedRectangle != null)
                     {
-                        _isSlected = false;
-                        selectedRectangle.Opacity = 1.0;
-                        // selectedRectangle.IsHitTestVisible = true;
-                        Canvas.SetZIndex(selectedRectangle, 0);
-                    }
-                    else
-                    {
-                        Canvas.SetLeft(selectedRectangle, CursorPosition.X - selectedRectangle.ActualWidth / 2);
-                        Canvas.SetTop(selectedRectangle, CursorPosition.Y - (140 + selectedRectangle.ActualHeight / 2));
+                        // When rectangle is moving 
+                        selectedRectangle.Opacity = 0.5;
+                        // selectedRectangle.IsHitTestVisible = false;
+                        Canvas.SetZIndex(selectedRectangle, 10);
+
+                        if (isup)
+                        {
+                            _isSlected = false;
+                            selectedRectangle.Opacity = 1.0;
+                            // selectedRectangle.IsHitTestVisible = true;
+                            Canvas.SetZIndex(selectedRectangle, 0);
+
+                            // Send which image is moving to the remote user
+                            MainWindow.Instance.SendMovingImage(number, _isSlected);
+                        }
+                        else
+                        {
+                            // Set moving image position on the Canvas
+                            Canvas.SetLeft(selectedRectangle, CursorPosition.X - selectedRectangle.ActualWidth / 2);
+                            Canvas.SetTop(selectedRectangle, CursorPosition.Y - (140 + selectedRectangle.ActualHeight / 2));
+
+                            // Send which image is moving to the remote user 
+                            MainWindow.Instance.SendMovingImage(number, _isSlected);
+                        }
                     }
                 }
             }
@@ -395,8 +414,6 @@ namespace KinectWhiteboard
 
             EndHover();
             _isHovering = false;
-
-            MainWindow.Instance.InfoLabel.Content = "You are moving image " + MainWindow.Instance.rectangleNumber;
 
             // Objects on Canvas will be selected when the hover animation is finished. 
             _isSlected = true;

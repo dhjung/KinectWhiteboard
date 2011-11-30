@@ -15,6 +15,11 @@ using System.Windows.Shapes;
 using Microsoft.Research.Kinect.Nui;
 using Coding4Fun.Kinect.Wpf;
 using System.Diagnostics;
+using System.ServiceModel;
+using System.Configuration;
+using System.Windows.Threading;
+using System.Threading;
+using System.Net;
 
 namespace KinectWhiteboard
 {
@@ -22,7 +27,7 @@ namespace KinectWhiteboard
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     /// 
-    public partial class MainWindow : Window
+    public partial class MainWindow : Window, IChatCallback
     {
         public static MainWindow Instance { get; private set; }
 
@@ -30,7 +35,10 @@ namespace KinectWhiteboard
         /// Gets the Kinect runtime object
         /// </summary>
         public Microsoft.Research.Kinect.Nui.Runtime NuiRuntime { get; private set; }
-        
+
+        // Rectangle selected by the remote user
+        public Rectangle remoteRec = new Rectangle();
+
         public MainWindow()
         {
             InitializeComponent();
@@ -87,6 +95,258 @@ namespace KinectWhiteboard
             Close();
         }
 
+        #region Client Events and Methods
+
+        private ChatProxy proxy;
+        private string myNick;
+
+        // private PleaseWaitDialog pwDlg;
+        private delegate void HandleDelegate(string[] list);
+        private delegate void HandleErrorDelegate();
+
+        private void OnConnect(object sender, RoutedEventArgs args)
+        {
+            InstanceContext site = new InstanceContext(this);
+            proxy = new ChatProxy(site);
+            
+            // Get Local IP Address
+            IPAddress[] localIPs = Dns.GetHostAddresses(Dns.GetHostName());
+            myNick = localIPs[1].ToString();
+
+            // Use IP Address as a user name
+            IAsyncResult iar = proxy.BeginJoin(myNick, new AsyncCallback(OnEndJoin), null);
+        }
+
+        private void OnEndJoin(IAsyncResult iar)
+        {
+            try
+            {
+                string[] list = proxy.EndJoin(iar);
+                HandleEndJoin(list);
+            }
+            catch (Exception e)
+            {
+                // Configure the message box to be displayed
+                string messageBoxText = e.Message;
+                string caption = "Connection Error : OnEndJoin";
+                MessageBoxButton button = MessageBoxButton.OK;
+                MessageBoxImage icon = MessageBoxImage.Warning;
+
+                // Display message box
+                MessageBox.Show(messageBoxText, caption, button, icon);
+            }
+             
+        }
+
+        private void HandleEndJoin(string[] list)
+        {
+            if (list == null)
+            {
+                    // pwDlg.ShowError("Error: Existing User Name");
+                    // ExitChatSession();
+            }
+            else
+            {
+                foreach (string name in list)
+                {
+                    //lstChatters.Items.Add(name);
+                }
+                // AppendText("Connected " + DateTime.Now.ToString() + " User: " + myNick + Environment.NewLine);
+            }
+        }
+
+        private void OnDisconnect(object sender, RoutedEventArgs args)
+        {
+            InfoLabel.Content = "Disconnect";
+            try
+            {
+                proxy.Leave();
+            }
+            catch (Exception e){
+                // Configure the message box to be displayed
+                string messageBoxText = e.Message;
+                string caption = "Connection Error : OnDisconnect";
+                MessageBoxButton button = MessageBoxButton.OK;
+                MessageBoxImage icon = MessageBoxImage.Warning;
+
+                // Display message box
+                MessageBox.Show(messageBoxText, caption, button, icon);
+            }
+            finally
+            {
+                AbortProxyAndUpdateUI();
+            }
+        }
+
+        // Abort and Close Proxy and Update UI?
+        private void AbortProxyAndUpdateUI()
+        {
+            if (proxy != null)
+            {
+                proxy.Abort();
+                proxy.Close();
+                proxy = null;
+            }
+            // ShowConnectMenuItem(true);
+        }
+
+        // Send current cursor position to server (Server will resend it to client)
+        public void SendCursorPosition(int x, int y)
+        {
+            try
+            {
+                //InfoLabel.Content = x.ToString() + " " + y.ToString();
+                Console.WriteLine("SendCursorPosition: " + x.ToString() + " " + y.ToString());
+
+                CommunicationState cs = proxy.State;
+                proxy.Say(x, y);
+                //if (!pvt)
+                //    proxy.Say(msg);
+                //else
+                //    proxy.Whisper(to, msg);
+
+                //txtMessage.Text = "";
+            }
+            catch
+            {
+                //AbortProxyAndUpdateUI();
+                //AppendText("연결이 종료되었습니다. " + DateTime.Now.ToString() + Environment.NewLine);
+                //Error("에러: 서버가 죽었습니다.!");
+            }
+        }
+
+        public void SendMovingImage(int imageNumber, bool isMoving)
+        {
+            try
+            {
+                Console.WriteLine("SendMovingImage: " + imageNumber + "," + isMoving);
+
+                CommunicationState cs = proxy.State;
+                proxy.Whisper(imageNumber, isMoving);
+            }
+            catch
+            {
+
+            }
+        }
+
+        #endregion
+
+        #region Implementation IChatCallback (Message from the server)
+
+        // Cursor location from the server
+        public int cursorX;
+        public int cursorY;
+
+        // Moving location from the server
+        public int movingX;
+        public int movingY;
+
+        // public void Receive(string senderName, string message)
+        public void Receive(string senderName, int x, int y)
+        {
+            Console.WriteLine("Receive: " + x.ToString() + " " + y.ToString());
+            
+            // Set cursor position from the server
+            cursorX = x;
+            cursorY = y;
+
+            // Set cursor position when the remote user is moving image
+            movingX = x;
+            movingY = y;
+
+            //InfoLabel.Content = "Receive from: " + senderName + " x:" + x.ToString() + " y:" + y.ToString();
+            if (senderName != myNick)
+            {
+                // AppendText(senderName + ": " + message + Environment.NewLine);
+                this.Dispatcher.BeginInvoke(DispatcherPriority.Normal, (ThreadStart)delegate()
+                {
+                    Canvas.SetLeft(Partner, cursorX);
+                    Canvas.SetTop(Partner, cursorY);
+                });
+            }
+        }
+
+        //public void ReceiveWhisper(string senderName, string message)
+        public void ReceiveWhisper(string senderName, int imageNumber, bool isMoving)
+        {
+            // AppendText(senderName + " whisper: " + message + Environment.NewLine);
+            Console.WriteLine("ReceiveWhisper: " + senderName + " " + imageNumber + " " + isMoving);
+
+            if (senderName != myNick)
+            {
+                this.Dispatcher.BeginInvoke(DispatcherPriority.Normal, (ThreadStart)delegate()
+                {
+                    switch (imageNumber)
+                    {
+                        case 1:
+                            remoteRec = R1;
+                            break;
+                        case 2:
+                            remoteRec = R2;
+                            break;
+                        case 3:
+                            remoteRec = R3;
+                            break;
+                        case 4:
+                            remoteRec = R4;
+                            break;
+                        case 5:
+                            remoteRec = R5;
+                            break;
+                        case 6:
+                            remoteRec = R6;
+                            break;
+                    }
+
+                    if (isMoving)
+                    {
+                        remoteRec.Opacity = 0.5;
+                        // Set rectangle's position and properties
+                        Canvas.SetLeft(remoteRec, movingX - remoteRec.ActualWidth / 2);
+                        Canvas.SetTop(remoteRec, movingY - (140 + remoteRec.ActualHeight / 2));
+                        Canvas.SetZIndex(remoteRec, 10);
+
+                        ImageLabel.Content = "Your partner is moving Image " + remoteRec.Name;
+                    }
+                    else
+                    {
+                        remoteRec.Opacity = 1.0;
+                        Canvas.SetZIndex(remoteRec, 0);
+
+                        rectangleNumber = 0;
+                        remoteRec = null;
+                    }
+
+                });
+            }
+
+        }
+
+        public void UserEnter(string name)
+        {
+            // AppendText("User " + name + " enter at " + DateTime.Now.ToString() + Environment.NewLine);
+            // lstChatters.Items.Add(name);
+            this.Dispatcher.BeginInvoke(DispatcherPriority.Normal, (ThreadStart)delegate()
+            {
+                InfoLabel.Content = "Client " + name + " joined.";
+                Console.WriteLine("Client " + name + " joined.");
+            });
+        }
+
+        public void UserLeave(string name)
+        {
+            // AppendText("User " + name + " leave at " + DateTime.Now.ToString() + Environment.NewLine);
+            // lstChatters.Items.Remove(name);
+            // AdjustWhisperButton();
+            this.Dispatcher.BeginInvoke(DispatcherPriority.Normal, (ThreadStart)delegate()
+            {
+                InfoLabel.Content = "Client " + name + " left.";
+                Console.WriteLine("Client " + name + " left.");
+            });
+        }
+        #endregion
+
         #region register KinectCursor Handler
 
         // This variable will be used to tract which rectangle the user selected.
@@ -116,99 +376,133 @@ namespace KinectWhiteboard
         // Called when the cursor enters this polygon's visible area
         private void RectangleOnCursorEnter1(object sender, CursorEventArgs args)
         {
-            rectangleNumber = 1;
-
-            args.Cursor.BeginHover();
-            args.Cursor.HoverFinished += Cursor_HoverFinished;
+            if (remoteRec != R1 || remoteRec == null)
+            {
+                args.Cursor.BeginHover();
+                args.Cursor.HoverFinished += Cursor_HoverFinished;
+                rectangleNumber = 1;
+            }
         }
 
         // Called when the cursor leaves this polygon's visible area
         private void RectangleOnCursorLeave1(object sender, CursorEventArgs args)
         {
-            rectangleNumber = 0;
-
-            args.Cursor.EndHover();
-            args.Cursor.HoverFinished -= Cursor_HoverFinished;
+            if (remoteRec != R1 || remoteRec == null)
+            {
+                args.Cursor.EndHover();
+                args.Cursor.HoverFinished -= Cursor_HoverFinished;
+                rectangleNumber = 0;
+            }
         }
         
         // Called when the cursor enters this polygon's visible area
         private void RectangleOnCursorEnter2(object sender, CursorEventArgs args)
         {
-            args.Cursor.BeginHover();
-            rectangleNumber = 2;
-            args.Cursor.HoverFinished += Cursor_HoverFinished;
+            if (remoteRec != R2 || remoteRec == null)
+            {
+                args.Cursor.BeginHover();
+                args.Cursor.HoverFinished += Cursor_HoverFinished;
+                rectangleNumber = 2;
+            }
         }
 
         // Called when the cursor leaves this polygon's visible area
         private void RectangleOnCursorLeave2(object sender, CursorEventArgs args)
         {
-            args.Cursor.EndHover();
-            rectangleNumber = 0;
-            args.Cursor.HoverFinished -= Cursor_HoverFinished;
+            if (remoteRec != R2 || remoteRec == null)
+            {
+                args.Cursor.EndHover();
+                args.Cursor.HoverFinished -= Cursor_HoverFinished;
+                rectangleNumber = 0;
+            }
         }
 
         // Called when the cursor enters this polygon's visible area
         private void RectangleOnCursorEnter3(object sender, CursorEventArgs args)
         {
-            args.Cursor.BeginHover();
-            rectangleNumber = 3;
-            args.Cursor.HoverFinished += Cursor_HoverFinished;
+            if (remoteRec != R3 || remoteRec == null)
+            {
+                args.Cursor.BeginHover();
+                args.Cursor.HoverFinished += Cursor_HoverFinished;
+                rectangleNumber = 3;
+            }
         }
 
         // Called when the cursor leaves this polygon's visible area
         private void RectangleOnCursorLeave3(object sender, CursorEventArgs args)
         {
-            args.Cursor.EndHover();
-            rectangleNumber = 0;
-            args.Cursor.HoverFinished -= Cursor_HoverFinished;
+            if (remoteRec != R3 || remoteRec == null)
+            {
+                args.Cursor.EndHover();
+                args.Cursor.HoverFinished -= Cursor_HoverFinished;
+                rectangleNumber = 0;
+            }
         }
 
         // Called when the cursor enters this polygon's visible area
         private void RectangleOnCursorEnter4(object sender, CursorEventArgs args)
         {
-            args.Cursor.BeginHover();
-            rectangleNumber = 4;
-            args.Cursor.HoverFinished += Cursor_HoverFinished;
+            if (remoteRec != R4 || remoteRec == null)
+            {
+                args.Cursor.BeginHover();
+                args.Cursor.HoverFinished += Cursor_HoverFinished;
+                rectangleNumber = 4;
+            }
         }
 
         // Called when the cursor leaves this polygon's visible area
         private void RectangleOnCursorLeave4(object sender, CursorEventArgs args)
         {
-            args.Cursor.EndHover();
-            rectangleNumber = 0;
-            args.Cursor.HoverFinished -= Cursor_HoverFinished;
+            if (remoteRec != R4 || remoteRec == null)
+            {
+                args.Cursor.EndHover();
+                args.Cursor.HoverFinished -= Cursor_HoverFinished;
+                rectangleNumber = 0;
+            }
         }
 
         // Called when the cursor enters this polygon's visible area
         private void RectangleOnCursorEnter5(object sender, CursorEventArgs args)
         {
-            args.Cursor.BeginHover();
-            rectangleNumber = 5;
-            args.Cursor.HoverFinished += Cursor_HoverFinished;
+            if (remoteRec != R5 || remoteRec == null)
+            {
+                args.Cursor.BeginHover();
+                args.Cursor.HoverFinished += Cursor_HoverFinished;
+                rectangleNumber = 5;
+            }
         }
 
         // Called when the cursor leaves this polygon's visible area
         private void RectangleOnCursorLeave5(object sender, CursorEventArgs args)
         {
-            args.Cursor.EndHover();
-            rectangleNumber = 0;
-            args.Cursor.HoverFinished -= Cursor_HoverFinished;
+            if (remoteRec != R5 || remoteRec == null)
+            {
+                args.Cursor.EndHover();
+                args.Cursor.HoverFinished -= Cursor_HoverFinished;
+                rectangleNumber = 0;
+            }
         }
 
         // Called when the cursor enters this polygon's visible area
         private void RectangleOnCursorEnter6(object sender, CursorEventArgs args)
         {
-            args.Cursor.BeginHover();
-            rectangleNumber = 6;
-            args.Cursor.HoverFinished += Cursor_HoverFinished;
+            if (remoteRec != R6 || remoteRec == null)
+            {
+                args.Cursor.BeginHover();
+                args.Cursor.HoverFinished += Cursor_HoverFinished;
+                rectangleNumber = 6;
+            }
         }
 
         // Called when the cursor leaves this polygon's visible area
         private void RectangleOnCursorLeave6(object sender, CursorEventArgs args)
         {
-            args.Cursor.EndHover();
-            rectangleNumber = 0;
-            args.Cursor.HoverFinished -= Cursor_HoverFinished;
+            if (remoteRec != R6 || remoteRec == null)
+            {
+                args.Cursor.EndHover();
+                args.Cursor.HoverFinished -= Cursor_HoverFinished;
+                rectangleNumber = 0;
+            }
         }
 
         // Called when the hover action has finished, and the button should be pressed
@@ -218,5 +512,6 @@ namespace KinectWhiteboard
         }
 
         #endregion
+
     }
 }
